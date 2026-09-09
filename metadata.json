@@ -1,0 +1,6 @@
+{
+  "name": "Gestor de Finanzas y Tarjetas",
+  "description": "Herramienta de gestión financiera para tarjetas de crédito y cuentas corrientes con importación/exportación CSV y generación de estrategias de pago con IA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

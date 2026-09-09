@@ -1,0 +1,89 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Connection testing endpoint
+    match /test/{testId} {
+      allow read: if true;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validation for UserProfile
+    function isValidUserProfile(data, userId) {
+      return data.id == userId &&
+        data.email is string && data.email.size() <= 256 &&
+        (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 128)) &&
+        (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 512));
+    }
+
+    // Validation for FinancialData
+    function isValidFinancialData(data, userId) {
+      return data.userId == userId &&
+        data.cards is list && data.cards.size() <= 100 &&
+        data.checkingAccounts is list && data.checkingAccounts.size() <= 50 &&
+        (!('projectName' in data) || (data.projectName is string && data.projectName.size() <= 128)) &&
+        (!('baseCurrency' in data) || (data.baseCurrency is string && data.baseCurrency.size() <= 10)) &&
+        (!('version' in data) || (data.version is string && data.version.size() <= 32));
+    }
+
+    // Validation for VersionSnapshot
+    function isValidVersionSnapshot(data, userId) {
+      return data.userId == userId &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 128 &&
+        data.data is map;
+    }
+
+    // User profile document and subcollections
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming(), userId);
+      allow update: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming(), userId) &&
+                    incoming().id == existing().id;
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // Financial project data (e.g. current project)
+      match /financialData/{docId} {
+        allow get: if isOwner(userId) && isValidId(docId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(docId) && isValidFinancialData(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(docId) && isValidFinancialData(incoming(), userId) &&
+                      incoming().userId == existing().userId;
+        allow delete: if isOwner(userId) && isValidId(docId);
+      }
+
+      // Version snapshots
+      match /snapshots/{snapshotId} {
+        allow get: if isOwner(userId) && isValidId(snapshotId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(snapshotId) && isValidVersionSnapshot(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(snapshotId) && isValidVersionSnapshot(incoming(), userId) &&
+                      incoming().userId == existing().userId;
+        allow delete: if isOwner(userId) && isValidId(snapshotId);
+      }
+    }
+  }
+}
